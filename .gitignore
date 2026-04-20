@@ -1,0 +1,48 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Node / JS
+node_modules/
+dist/
+build/
+.npm/
+.vite/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Log files
+*.log
+logs/
+
+# Data and Models
+data/
+*.db
+*.sqlite3
+
+# Cached files
+.cache/
+.pytest_cache/
+.coverage
+htmlcov/
