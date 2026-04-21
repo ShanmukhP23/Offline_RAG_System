@@ -1,10 +1,16 @@
 import os
 import shutil
 import hashlib
+import logging
 from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List
+
+logger = logging.getLogger(__name__)
+
+MAX_UPLOAD_SIZE_MB = 500
+MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024
 
 from db.database import get_db
 from db import models
@@ -31,11 +37,20 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
         with open(file_location, "wb+") as file_object:
             shutil.copyfileobj(file.file, file_object)
 
-        # Generate file hash to prevent duplicates
+        # Enforce upload size limit
+        file_size = os.path.getsize(file_location)
+        if file_size > MAX_UPLOAD_SIZE_BYTES:
+            os.remove(file_location)
+            raise HTTPException(
+                status_code=413,
+                detail=f"File too large ({file_size / (1024*1024):.1f}MB). Maximum is {MAX_UPLOAD_SIZE_MB}MB."
+            )
+
+        # Generate file hash to prevent duplicates (stream in chunks to avoid RAM spike)
         hasher = hashlib.md5()
         with open(file_location, "rb") as f:
-            buf = f.read()
-            hasher.update(buf)
+            for block in iter(lambda: f.read(8192), b""):
+                hasher.update(block)
         file_hash = hasher.hexdigest()
 
         # Check if already exists
@@ -68,25 +83,31 @@ async def upload_document(file: UploadFile = File(...), db: Session = Depends(ge
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest, db: Session = Depends(get_db)):
-    query = request.message
-    
-    # 1. Retrieve Context
-    results = vector_store.search(query, top_k=4)
-    
-    # 2. Generate Answer
-    answer = llm_service.generate_response(query, results)
-    
-    # 3. Store Chat History
-    user_msg = models.ChatMessage(session_id=request.session_id, role="user", content=query)
-    ai_msg = models.ChatMessage(session_id=request.session_id, role="assistant", content=answer)
-    db.add(user_msg)
-    db.add(ai_msg)
-    db.commit()
+    try:
+        query = request.message
+        
+        # 1. Retrieve Context
+        results = vector_store.search(query, top_k=4)
+        
+        # 2. Generate Answer
+        answer = llm_service.generate_response(query, results)
+        
+        # 3. Store Chat History
+        user_msg = models.ChatMessage(session_id=request.session_id, role="user", content=query)
+        ai_msg = models.ChatMessage(session_id=request.session_id, role="assistant", content=answer)
+        db.add(user_msg)
+        db.add(ai_msg)
+        db.commit()
 
-    # 4. Prepare Citations
-    citations = [{"filename": r["filename"], "chunk": r["chunk"], "distance": r["distance"]} for r in results]
+        # 4. Prepare Citations
+        citations = [{"filename": r["filename"], "chunk": r["chunk"], "distance": r["distance"]} for r in results]
 
-    return {"answer": answer, "citations": citations}
+        return {"answer": answer, "citations": citations}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Chat error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to process chat: {str(e)}")
 
 @router.get("/documents")
 async def list_documents(db: Session = Depends(get_db)):
