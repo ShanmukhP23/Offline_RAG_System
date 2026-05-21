@@ -12,6 +12,13 @@ class DocumentExtractor:
 
     def _load_whisper(self):
         if self.whisper_model is None:
+            try:
+                import static_ffmpeg
+                print("Setting up static ffmpeg path...")
+                static_ffmpeg.add_paths()
+                print("Static ffmpeg paths added successfully.")
+            except Exception as e:
+                print(f"Failed to setup static ffmpeg paths: {e}")
             self.whisper_model = whisper.load_model("base")
         return self.whisper_model
 
@@ -24,10 +31,15 @@ class DocumentExtractor:
             return self._extract_image(filepath)
         elif file_type.startswith("audio/") or filepath.endswith((".mp3", ".wav", ".m4a")):
             return self._extract_audio(filepath)
+        elif file_type.startswith("video/") or filepath.endswith((".mp4", ".mkv", ".avi", ".mov", ".flv", ".webm")):
+            return self._extract_video(filepath)
         elif file_type == "text/plain" or filepath.endswith(".txt"):
             return self._extract_txt(filepath)
         else:
             raise ValueError(f"Unsupported file type: {file_type}")
+
+    def _extract_video(self, filepath: str) -> str:
+        return self._extract_audio(filepath)
 
     def _extract_pdf(self, filepath: str) -> str:
         text = ""

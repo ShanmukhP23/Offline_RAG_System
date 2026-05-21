@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     
     # Model configuration
     LLM_BASE_URL: str = "http://localhost:11434"
-    DEFAULT_MODEL: str = "mistral"  # Assume Mistral 7B is pulled in Ollama
+    DEFAULT_MODEL: str = "llama3.2"  # Assume Llama 3.2 is pulled in Ollama
     EMBEDDING_MODEL: str = "sentence-transformers/all-MiniLM-L6-v2"
     
     # Chunking configuration
